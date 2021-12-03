@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Replacer": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Users\\jnbar\\Downloads\\Scripts\\Scripts\\Assembly-CSharp\" \"C:\\Users\\jnbar\\Downloads\\New_folder\\New folder\\Prefab\" \"00000000000000000000000000000000\""
+    }
+  }
+}
