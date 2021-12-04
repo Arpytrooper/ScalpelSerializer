@@ -11,6 +11,7 @@ namespace Replacer
     {
         private readonly IConfigurationRoot _configuration;
         private readonly Dictionary<string, Assembly> _assemblyDict;
+        private readonly List<GuidReplacement> _guidReplacementList;
 
         private struct Assembly
         {
@@ -18,6 +19,11 @@ namespace Replacer
             public string File { get; set; }
         }
 
+        private struct GuidReplacement
+        {
+            public string NewGuid { get; set; }
+            public string OldGuid { get; set; }
+        }
 
         /// <summary>
         /// Replacer scans one or more folders of decompiled assemblies, and a folder of Unity assets and attempts to
@@ -31,6 +37,7 @@ namespace Replacer
             var assetFilters = _configuration.GetSection("AssetTypes").Get<string[]>();
             var assemblyBindings = _configuration.GetSection("AssemblyBindings").Get<string[][]>();
             var prefabDir = _configuration["PrefabsPath"];
+            _guidReplacementList = BuildGuidReplacementList(_configuration.GetSection("GuidReplacements").Get<string[][]>());
             _assemblyDict = BuildAssemblyDict(assemblyBindings);
             ProcessAssets(prefabDir, assetFilters.ToList());
         }
@@ -41,7 +48,7 @@ namespace Replacer
         /// </summary>
         /// <param name="assetDir">Root directory of assets to patch</param>
         /// <param name="assetFilters">List of filters that will be used to select appropriate fiel types. E.g. '*.asset' </param>
-        private void ProcessAssets(string assetDir,  List<string> assetFilters)
+        private void ProcessAssets(string assetDir, List<string> assetFilters)
         {
             Console.WriteLine($"Scanning Assets...");
             var files = EnumerateDirectory(assetDir, assetFilters);
@@ -64,7 +71,8 @@ namespace Replacer
         private void ProcessFile(string filePath)
         {
             using (var originalFile = File.OpenText(filePath))
-            using (var editedFile = new StreamWriter("buffer.txt")) //use a buffer so we can write to the file while streaming through it.
+            using (var editedFile = new StreamWriter("buffer.txt"))
+                //use a buffer so we can write to the file while streaming through it.
             {
                 var regex = new Regex(@"^\s*?m_Script: {fileID: (\d+), guid: (.*?),.*$");
                 string line;
@@ -78,20 +86,29 @@ namespace Replacer
                         if (_assemblyDict.ContainsKey(guid))
                         {
                             //the assemblyDict contains a reference to the meta file; we need to truncate it to get the script's file name
-                            var fileName = _assemblyDict[guid].File.Replace(".meta", ""); 
-                            
+                            var fileName = _assemblyDict[guid].File.Replace(".meta", "");
+
                             var newFileId = CalcFileId(fileName); //calc the new fileId then update the references
                             line = line.Replace(fileId, newFileId);
                             line = line.Replace(guid, _assemblyDict[guid].NewGuid);
                         }
-                        
                     }
+                    //replace any guids in the line that match any of the GuidReplacements
+                    foreach (var guidReplacement in _guidReplacementList)
+                    {
+                        if (line.Contains(guidReplacement.OldGuid))
+                        {
+                            line = line.Replace(guidReplacement.OldGuid, guidReplacement.NewGuid);
+                        }
+                    }
+
                     editedFile.WriteLine(line);
                 }
             }
 
             try
-            {// file juggling to prevent issues with writing to a file were reading from.
+            {
+                // file juggling to prevent issues with writing to a file were reading from.
                 var backupPath = $"{filePath}.old";
                 File.Copy(filePath, backupPath);
                 if (File.Exists(backupPath))
@@ -105,6 +122,25 @@ namespace Replacer
             {
                 Console.WriteLine(e);
             }
+        }
+
+        /// <summary>
+        /// Takes the array of pairs of strings from config and converts to list of GuidReplacements
+        /// </summary>
+        /// <param name="guidReplacements"></param>
+        private List<GuidReplacement> BuildGuidReplacementList(string[][] guidReplacements)
+        {
+            var guidReplacementDict = new List<GuidReplacement>();
+            foreach (var guidReplacement in guidReplacements)
+            {
+                guidReplacementDict.Add(new GuidReplacement()
+                {
+                    OldGuid = guidReplacement[0],
+                    NewGuid = guidReplacement[1]
+                });
+            }
+
+            return guidReplacementDict;
         }
 
         /// <summary>
@@ -124,7 +160,7 @@ namespace Replacer
                 var assemblyGuid = assemblyBinding[1];
 
                 Console.WriteLine($"Scanning Assemblies...");
-                files.AddRange(EnumerateDirectory(assemblyDir, new List<string>() { "*.meta" }));
+                files.AddRange(EnumerateDirectory(assemblyDir, new List<string>() {"*.meta"}));
                 Console.WriteLine($"Found {files.Count} .meta files in assembly: {assemblyDir}");
 
                 foreach (var file in files)
@@ -141,7 +177,8 @@ namespace Replacer
                                 var guid = matches[0].Groups[1].Value;
                                 if (!assemblyDict.ContainsKey(guid))
                                 {
-                                    assemblyDict.Add(matches[0].Groups[1].Value, new Assembly() { File = file, NewGuid = assemblyGuid });
+                                    assemblyDict.Add(matches[0].Groups[1].Value,
+                                        new Assembly() {File = file, NewGuid = assemblyGuid});
                                 }
                             }
                         }
@@ -177,6 +214,7 @@ namespace Replacer
                     {
                         foundNamespace = namespaceMatches[0].Groups[1].Value;
                     }
+
                     if (nameMatches.Count > 0)
                     {
                         foundClassname = nameMatches[0].Groups[1].Value;
@@ -212,6 +250,7 @@ namespace Replacer
             {
                 filters = new List<string>() {"*"};
             }
+
             Console.WriteLine($"Scanning Root Dir: {path}");
             if (!Directory.Exists(path))
             {
@@ -222,8 +261,9 @@ namespace Replacer
                 var files = new List<string>();
                 foreach (var filter in filters)
                 {
-                    files.AddRange( Directory.EnumerateFiles(path, filter, SearchOption.AllDirectories).ToList());
+                    files.AddRange(Directory.EnumerateFiles(path, filter, SearchOption.AllDirectories).ToList());
                 }
+
                 return files;
             }
         }
