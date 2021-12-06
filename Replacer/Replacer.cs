@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 
 namespace Replacer
@@ -54,13 +55,13 @@ namespace Replacer
             var files = EnumerateDirectory(assetDir, assetFilters);
             Console.WriteLine($"Found {files.Count} assets.");
             var progressCount = 1;
-            foreach (var file in files)
-            {
-                Console.WriteLine($"Processing file: {file}. {progressCount}/{files.Count}");
-                ProcessFile(file);
-                Console.WriteLine($"Finished processing: {file}");
-                progressCount++;
-            }
+
+            Parallel.ForEach(files, ProcessFile );
+        }
+
+        private void CallBack(object? state)
+        {
+            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -70,8 +71,10 @@ namespace Replacer
         /// <param name="filePath">Path to an asset file</param>
         private void ProcessFile(string filePath)
         {
+            var bufferName = Guid.NewGuid().ToString(); //create random buffer file
+            Console.WriteLine($"Processing file: {filePath}");
             using (var originalFile = File.OpenText(filePath))
-            using (var editedFile = new StreamWriter("buffer.txt"))
+            using (var editedFile = new StreamWriter(bufferName))
                 //use a buffer so we can write to the file while streaming through it.
             {
                 var regex = new Regex(@"^\s*?m_Script: {fileID: (\d+), guid: (.*?),.*$");
@@ -114,14 +117,17 @@ namespace Replacer
                 if (File.Exists(backupPath))
                 {
                     File.Delete(filePath);
-                    File.Move("buffer.txt", filePath);
+                    File.Move(bufferName, filePath);
                     File.Delete(backupPath); // remove this if you want to save a backup of the unaltered file.
                 }
+                Console.WriteLine($"Finished processing: {filePath}");
             }
             catch (Exception e)
             {
                 Console.WriteLine(e);
             }
+
+            
         }
 
         /// <summary>
