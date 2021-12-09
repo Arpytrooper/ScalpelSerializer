@@ -142,6 +142,14 @@ namespace Replacer
             
         }
 
+
+        /// <summary>
+        /// Takes replacement list from config and builds a dictionary of script replacements.
+        /// The script replacements are indexed by (old) guid. Any asset files can be searched for matching guids and have their
+        /// script references replaced by a pre defined replacement fileId and guid.
+        /// </summary>
+        /// <param name="replacementList"></param>
+        /// <returns></returns>
         private Dictionary<string, ScriptReplacement> BuildScriptReplacementList(string[][] replacementList)
         {
             var scriptReplacementDict = new Dictionary<string, ScriptReplacement>();
