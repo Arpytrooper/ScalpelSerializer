@@ -13,6 +13,12 @@ namespace Replacer
         private readonly IConfigurationRoot _configuration;
         private readonly Dictionary<string, Assembly> _assemblyDict;
         private readonly List<GuidReplacement> _guidReplacementList;
+        private readonly Dictionary<string, ScriptReplacement> _scriptReplacementList;
+        private struct GuidReplacement
+        {
+            public string NewGuid { get; set; }
+            public string OldGuid { get; set; }
+        };
 
         private struct Assembly
         {
@@ -20,10 +26,12 @@ namespace Replacer
             public string File { get; set; }
         }
 
-        private struct GuidReplacement
+        private struct ScriptReplacement
         {
-            public string NewGuid { get; set; }
             public string OldGuid { get; set; }
+            public string NewGuid { get; set; }
+            public string NewFileId { get; set; }
+
         }
 
         /// <summary>
@@ -40,6 +48,7 @@ namespace Replacer
             var prefabDir = _configuration["PrefabsPath"];
             _guidReplacementList = BuildGuidReplacementList(_configuration.GetSection("GuidReplacements").Get<string[][]>());
             _assemblyDict = BuildAssemblyDict(assemblyBindings);
+            _scriptReplacementList = BuildScriptReplacementList(configuration.GetSection("ScriptReplacements").Get<string[][]>());
             ProcessAssets(prefabDir, assetFilters.ToList());
         }
 
@@ -57,11 +66,6 @@ namespace Replacer
             var progressCount = 1;
 
             Parallel.ForEach(files, ProcessFile );
-        }
-
-        private void CallBack(object? state)
-        {
-            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -95,6 +99,14 @@ namespace Replacer
                             line = line.Replace(fileId, newFileId);
                             line = line.Replace(guid, _assemblyDict[guid].NewGuid);
                         }
+
+                        if (_scriptReplacementList.ContainsKey(guid))
+                        {
+                            var replacement = _scriptReplacementList[guid];
+                            line = line.Replace(guid, replacement.NewGuid);
+                            line = line.Replace(fileId, replacement.NewFileId);
+                        }
+                        
                     }
                     //replace any guids in the line that match any of the GuidReplacements
                     foreach (var guidReplacement in _guidReplacementList)
@@ -130,23 +142,49 @@ namespace Replacer
             
         }
 
+        private Dictionary<string, ScriptReplacement> BuildScriptReplacementList(string[][] replacementList)
+        {
+            var scriptReplacementDict = new Dictionary<string, ScriptReplacement>();
+            if (replacementList != null)
+            {
+                foreach (var replacement in replacementList)
+                {
+                    var scriptReplacement = new ScriptReplacement()
+                    {
+                        OldGuid = replacement[0],
+                        NewGuid = replacement[1],
+                        NewFileId = replacement[2]
+                    };
+
+                    if (!scriptReplacementDict.ContainsKey(scriptReplacement.OldGuid))
+                    {
+                        scriptReplacementDict.Add(scriptReplacement.OldGuid, scriptReplacement);
+                    }
+                }
+            }
+
+            return scriptReplacementDict;
+        }
+
         /// <summary>
         /// Takes the array of pairs of strings from config and converts to list of GuidReplacements
         /// </summary>
         /// <param name="guidReplacements"></param>
         private List<GuidReplacement> BuildGuidReplacementList(string[][] guidReplacements)
         {
-            var guidReplacementDict = new List<GuidReplacement>();
-            foreach (var guidReplacement in guidReplacements)
+            var guidReplacementList = new List<GuidReplacement>();
+            if (guidReplacements != null)
             {
-                guidReplacementDict.Add(new GuidReplacement()
+                foreach (var guidReplacement in guidReplacements)
                 {
-                    OldGuid = guidReplacement[0],
-                    NewGuid = guidReplacement[1]
-                });
+                    guidReplacementList.Add(new GuidReplacement()
+                    {
+                        OldGuid = guidReplacement[0],
+                        NewGuid = guidReplacement[1]
+                    });
+                }
             }
-
-            return guidReplacementDict;
+            return guidReplacementList;
         }
 
         /// <summary>
