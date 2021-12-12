@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -49,7 +50,11 @@ namespace Replacer
             _guidReplacementList = BuildGuidReplacementList(_configuration.GetSection("GuidReplacements").Get<string[][]>());
             _assemblyDict = BuildAssemblyDict(assemblyBindings);
             _scriptReplacementList = BuildScriptReplacementList(configuration.GetSection("ScriptReplacements").Get<string[][]>());
+            var watch = new Stopwatch();
+            watch.Start();
             ProcessAssets(prefabDir, assetFilters.ToList());
+            watch.Stop();
+            Console.WriteLine($"Execution time to process Assets: {watch.ElapsedMilliseconds}ms");
         }
 
         /// <summary>
@@ -204,6 +209,9 @@ namespace Replacer
         {
             var assemblyDict = new Dictionary<string, Assembly>();
             var files = new List<string>();
+
+            var watch = new Stopwatch();
+            watch.Start();
             //Assemblies will have fixed guids, so we read the bindings from config.
             //For each binding we scan the directory for .meta files and tag them with the appropriate new guid, indexing by old guid.
             foreach (var assemblyBinding in assemblyBindings)
@@ -237,6 +245,8 @@ namespace Replacer
                     }
                 }
             }
+            watch.Stop();
+            Console.WriteLine($"Time taken to build Assembly Dict: {watch.ElapsedMilliseconds}ms");
 
             return assemblyDict;
         }
