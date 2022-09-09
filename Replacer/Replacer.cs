@@ -15,6 +15,7 @@ namespace Replacer
         private readonly Dictionary<string, Assembly> _assemblyDict;
         private readonly List<GuidReplacement> _guidReplacementList;
         private readonly Dictionary<string, ScriptReplacement> _scriptReplacementList;
+        private readonly Dictionary<string, OldGUID> _oldGUIDDict;
         private struct GuidReplacement
         {
             public string NewGuid { get; set; }
@@ -26,7 +27,11 @@ namespace Replacer
             public string NewGuid { get; set; }
             public string File { get; set; }
         }
-
+        private struct OldGUID
+        {
+            public string OldGUID { get; set; }
+            public string File { get; set; }
+        }
         private struct ScriptReplacement
         {
             public string OldGuid { get; set; }
@@ -49,6 +54,7 @@ namespace Replacer
             var prefabDir = _configuration["PrefabsPath"];
             _guidReplacementList = BuildGuidReplacementList(_configuration.GetSection("GuidReplacements").Get<string[][]>());
             _assemblyDict = BuildAssemblyDict(assemblyBindings);
+            _oldGUIDDict = BuildOldAssetGUIDDict(prefabDir);
             _scriptReplacementList = BuildScriptReplacementList(configuration.GetSection("ScriptReplacements").Get<string[][]>());
             var watch = new Stopwatch();
             watch.Start();
@@ -249,6 +255,56 @@ namespace Replacer
             Console.WriteLine($"Time taken to build Assembly Dict: {watch.ElapsedMilliseconds}ms");
 
             return assemblyDict;
+        }
+
+        /// <summary>
+        /// For each asset file in the file directory find their meta files and save the old GUID within it.
+        /// </summary>
+        /// <param name="AssetGUIDs">Dict containing all .meta files, keyed by old GUID</param>
+        /// <returns></returns>
+        private static Dictionary<string, OldGUID> BuildOldAssetGUIDDict(string[][] AssetGUIDs){
+            var OldAssetGUIDDict = new Dictionary<string, OldGUID>();
+            var files = new List<string>();
+
+            var watch = new Stopwatch();
+            watch.Start();
+            //Since we're going to be reserializing all GUIDs for assets we need to store the old GUIDs somewhere 
+            //for each file we will be storing the file name with the old GUID to reference for replacements inside of prefabs 
+            foreach (var OldGUIDs in AssetGUIDs)
+            {
+                var assemblyDir = OldGUIDs[0];
+                var assemblyGuid = OldGUIDs[1];
+
+                Console.WriteLine($"Scanning Files for original GUIDs...");
+                files.AddRange(EnumerateDirectory(assemblyDir, new List<string>() {"*.meta"}));
+                Console.WriteLine($"Found {files.Count} .meta files in assembly: {assemblyDir}");
+
+                foreach (var file in files)
+                {
+                    using (var scriptFile = File.OpenText(file))
+                    {
+                        string line;
+                        while ((line = scriptFile.ReadLine()) != null)
+                        {
+                            var regex = new Regex("^guid: (.*?)$");
+                            var matches = regex.Matches(line);
+                            if (matches.Count > 0)
+                            {
+                                var guid = matches[0].Groups[1].Value;
+                                if (!OldAssetGUIDDict.ContainsKey(guid))
+                                {
+                                    OldAssetGUIDDict.Add(matches[0].Groups[1].Value,
+                                        new Assembly() {File = file, NewGuid = assemblyGuid});
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            watch.Stop();
+            Console.WriteLine($"Time taken to build old GUID Dict: {watch.ElapsedMilliseconds}ms");
+
+            return OldAssetGUIDDict;
         }
 
         /// <summary>
