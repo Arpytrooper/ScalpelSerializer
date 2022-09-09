@@ -262,7 +262,7 @@ namespace Replacer
         /// </summary>
         /// <param name="AssetGUIDs">Dict containing all .meta files, keyed by old GUID</param>
         /// <returns></returns>
-        private static Dictionary<string, OldGUID> BuildOldAssetGUIDDict(string[][] AssetGUIDs){
+        private static Dictionary<string, OldGUID> BuildOldAssetGUIDDict(string AssetGUIDs){
             var OldAssetGUIDDict = new Dictionary<string, OldGUID>();
             var files = new List<string>();
 
@@ -272,8 +272,8 @@ namespace Replacer
             //for each file we will be storing the file name with the old GUID to reference for replacements inside of prefabs 
             foreach (var OldGUIDs in AssetGUIDs)
             {
-                var assemblyDir = OldGUIDs[0];
-                var assemblyGuid = OldGUIDs[1];
+                var assemblyDir = OldGUIDs;
+                //var assemblyGuid = OldGUIDs[1];
 
                 Console.WriteLine($"Scanning Files for original GUIDs...");
                 files.AddRange(EnumerateDirectory(assemblyDir, new List<string>() {"*.meta"}));
